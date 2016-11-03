@@ -1,0 +1,160 @@
+﻿<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>h5懒加载问题</title>
+	<style type="text/css">
+		.imgWarp{
+			width:640px;
+			height:853px;
+		}
+		.imgWarp>ul>li{
+			width:100px;
+			height:100px;
+		}
+		ul{list-style: none}
+		.imgWarp>ul>li img{
+			width:100%;
+			height:100%;
+		}
+		.off{
+			width:300px;
+			height:300px;
+			border:1px solid #ddd;
+			position:relative;
+		}
+		.span{
+			width:100px;
+			height:100px;
+			background:orange;
+			display: block;
+		}
+	</style>
+</head>
+<body>
+	<div class="imgWarp">
+		<ul>
+			<li><img src="images/pie.png" data-src="images/img_03.jpg" alt=""/></li>
+			<li><img src="images/pie.png" data-src="images/big.jpg" alt="" /></li>
+			<li><img src="images/pie.png" data-src="images/112.jpg" alt="" /></li>
+			<li><img src="images/pie.png" data-src="images/img_02.jpg" alt="" /></li>
+			<li><img src="images/pie.png" data-src="images/img_04.jpg" alt="" /></li>			
+			<li><img src="images/pie.png" data-src="images/img_09.jpg" alt="" /></li>
+		</ul>
+		
+		<div class="off">
+		<span class="span"></span>	
+		</div>
+	</div>
+	<script type="text/javascript">
+		/*author:pingfan ,date:2015-04-30
+		  移动端图片按需加载，优化资源加载的问题  
+		  主体对象appLazyload，接收参数opt，对应两个属性warp包容器，正确标签属性loadsrc,图片加载失败的路径errorSrc
+		*/	
+
+		;(function(window,undefined){
+
+			//封装绑定事件机制
+		    var EventUtil={
+                addHandler:function(element,type,handler){
+                        if(element.addEventListener){
+                                element.addEventListener(type,handler,false);
+                        }else if(element.attachEvent){
+                                element.attachEvent("on"+type,handler);
+                        }else{
+                                element["on"+type]=handler;
+                        }
+                },
+                removeHandler:function(element,type,handler){
+                        if(element.removeEventListener){
+                                element.removeEventListener(type,handler,false);
+                        }else if(element.detachEvent){
+                                element.detachEvent('on'+type,handler);
+                        }else{
+                                element["on"+type]=null;
+                        }
+                }
+            }
+
+			   //页面可视区域高度
+			var veiwHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight,
+				//滚动调滑块的高度
+				scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop,
+				//页面的总高度
+				totalHeight = document.documentElement.scrollHeight ||  document.body.scrollHeight;
+
+				//更改浏览器窗口时，更新页面可视区域高度
+				EventUtil.addHandler(window,"resize",function(){
+					veiwHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
+				});
+
+
+				function appLazyload(opt){
+					this.warp=opt.warp,
+					this.imgList = opt.warp.getElementsByTagName("img") || [],
+					this.loadsrc = opt.loadsrc,
+					this.errorSrc = opt.errorSrc || "";
+					this.init();
+				}
+
+				appLazyload.prototype={
+					constructor:appLazyload,
+					getTop:function(elem){
+						//这里是获取页面中某个元素的左，上，右和下分别相对浏览器视窗的位置
+						return elem.getBoundingClientRect().top
+
+						//获得元素相对于页面顶部的高度以下最精确,采用obj.offsetTop 指 obj 距离上方或上层控件的位置不准确 
+						//return elem.getBoundingClientRect().top+scrollTop;
+					},
+					loadImg:function(elem,i){
+						var self = this;
+						if(self.getTop(elem)<veiwHeight){
+							elem.src = elem.getAttribute(self.loadsrc);
+							EventUtil.addHandler(elem,"load",function(){
+								elem.removeAttribute(self.loadsrc);
+								elem.style.cssText = "opacity:1;-webkit-transition:opacity 0.6s linear";
+								self.imgList[i] = null;
+							});
+							EventUtil.addHandler(elem,"error",function(){
+								elem.src = self.errorSrc,
+								elem.removeAttribute(self.loadsrc);
+								elem.style.cssText = "opacity:1;-webkit-transition:opacity 0.6s linear";
+								self.imgList[i] = null;
+							});
+							elem.style.opacity = 0;					
+						}
+					},
+					delEmp:function(arr){
+						var newArr = [];
+						for(var i=0,len=arr.length;i<len;i++){
+							(arr[i] !== null && arr[i] !== undefined) && (newArr.push(arr[i]));
+						}
+						return newArr;
+					},
+					init:function(){
+						var self = this; this.index = 0;
+						self.imgList = Array.prototype.slice.call(self.imgList);
+						console.log(self.imgList);
+						for(var i = 0,len = self.imgList.length;i<len;i++){
+							self.loadImg(self.imgList[i],i);
+						}
+						EventUtil.addHandler(window,"scroll",function(){
+							setTimeout(function(){
+								self.imgList = self.delEmp(self.imgList);
+								for(var i = 0,len = self.imgList.length;i<len;i++){
+									self.loadImg(self.imgList[i],i);
+								}							
+							},1000/16);
+						});
+					}
+				}
+				window.appLazyload=appLazyload;
+		})(window)
+		new appLazyload({
+			warp:document.querySelector(".imgWarp"),
+			loadsrc:'data-src',
+			errorSrc:''
+		})
+	</script>
+</body>
+</html>
