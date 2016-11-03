@@ -5,13 +5,13 @@
 	<title>按需加载器</title>
 </head>
 <body>
-	<h2>加载队列</h2>
+	<h2>加载队列 <em class = "progress">0%</em></h2>
 	<a href="javascript:;" id="one">点击我1</a>
 	<a href="javascript:;" id="two">点击我2</a>
 	<script>
 		/*author:pingfan ,date:2014-12-04
 		  按需加载库，本库是顺序加载，不涉及并行加载  
-		  主体方法LoadQueue，接收参数opt，对应两个属性manifest加载资源，version版本号
+		  主体方法LoadQueue，接收参数opt，对应两个属性manifest加载资源，version版本号, path路径前缀
 		*/
 
 		;(function(window,undefined){
@@ -38,19 +38,18 @@
                 }
             }
                 
-			function LoadQueue(opt){
-				this.list=opt.manifest || [],
-				this.version=opt.version,
-				this.loadsuccess=false;
+			function LoadList(opt){
+				this.list = opt.manifest || [],
+				this.version = opt.version,
+				this.path = opt.path || "",
+				this.loadsuccess=false,
+				this.done();
 			}
 
-			LoadQueue.prototype={
-				constructor:LoadQueue,
+			LoadList.prototype={
+				constructor:LoadList,
 				isType:function(src){
-
-					/*通过正则匹配加载资源的类型，img，script，css，audio
-					  匹配都不区分大小写，因为扩展名大写浏览器也可访问到	*/
-					var resImg=/.*\.jpg|png|gif|bmp(?=\?|$)/i,
+					var resImg=/.*\.jpg|jpeg|png|gif|bmp(?=\?|$)/i,
 						resJs=/.*\.js(?=\?|$)/i,
 						resCss=/.*\.css(?=\?|$)/i,
 						resSound=/.*\.mp3|m4a|ogg|wav|wma(?=\?|$)/i;
@@ -59,12 +58,9 @@
 					if(resCss.test(src)) return "css";	
 					if(resSound.test(src)) return "audio";	
 				},
-
-				/*由于load事件在ie8及以下，对标签<script>,<link>,不支持，下面通用的对css，js监测加载成功
-				 对接参数type为类型css或者js，src为路径，callback为加载成功或不成功的回调函数*/
 				loadCssJS:function(type,src,callback){
 					var source,_this=this;
-		   			if(type == "css"){
+		   			if (type == "css"){
 		   				source = document.createElement("link");
 		   				source.setAttribute("rel","stylesheet")
 		   				source.setAttribute("type","text/css");
@@ -72,8 +68,6 @@
 		   				source = document.createElement('script');
 		   				source.setAttribute("type","text/javascript");
 		   			}
-
-					//因为有的浏览器既支持load事件和，readystatechange事件，这里用了if else所以防止出现两次，js，css监测，ie8及更早不支持<javascript>标签的load事件
 			        if (source.readyState){  //IE
 			            EventUtil.addHandler(source,"readystatechange",function(){
 			                if (source.readyState == "loaded" || source.readyState == "complete"){
@@ -98,18 +92,13 @@
 					(type == "js") && (source.setAttribute("src", src));			
 				   	document.getElementsByTagName('head')[0].appendChild(source); 	 			        
 				},
-
-				/*getResult是获取加载成功的资源,这里只能获取加载成功的img，audio资源，js和css是直接加到<head>标签的不能获取操作，传入参数id即为manifest里面对应的属性*/
 				getResult:function(id){
-					//当没有加载成功启动此方法，直接返回null
 					if(!this.loadsuccess) return null; 
 					for(var i=0,len=this.list.length;i<len;i++){
 						if(this.list[i].id == id){
 							var returnSrc=this.list[i].src;
 							if(this.isType(returnSrc) == "img"){
-								var img = new Image();
-								img.src=returnSrc;
-								return img;
+								return this.list[i].imgObject;
 							}else if(this.isType(returnSrc) == "audio"){
 								var audio = new Audio();
 								audio.src=returnSrc;
@@ -123,22 +112,26 @@
 
 				/*加载执行函数*/
 				done:function(){
-					//如果导入资源为空则直接返回,fasle对应0,1为ture则可以采取以下判断
 					if(!this.list.length) return false;
-					var _this=this,len=this.list.length,i=0;
-					(function isLoad(i){
-						var src=_this.list[i].src;
-
-						//导入的资源不能含有？时间戳和版本号，监测版本号参数是否存在，加版本号
+					var _this=this,
+						len=this.list.length,
+						count = 0; //加载计时器
+					this.precent = "0%";
+ 					for(var i = 0;i<len;i++){
+						var src=_this.path+_this.list[i].src;
 						(_this.version) && (src=src+"?ver="+_this.version);
 
 						//图片资源加载
 						if(_this.isType(src) == "img"){
 							var img=new Image();
+							_this.list[i].imgObject = img;
 							EventUtil.addHandler(img,"load",function(){
+								//加载一次执行一次
+
 								callNext();
 							});
 							EventUtil.addHandler(img,"error",function(){
+								_this.list[i].imgObject = ''
 								callNext();
 							});
 							img.src=src;
@@ -147,7 +140,6 @@
 						//音频资源加载
 						if(_this.isType(src) == "audio"){
 							var audio=new Audio();
-							//音频audio用使用canplaythrough来监测是否加载成功
 							EventUtil.addHandler(audio,"canplaythrough",function(){
 								callNext();
 							});
@@ -165,27 +157,34 @@
 						//样式资源加载
 						if(_this.isType(src) == "css"){
 							_this.loadCssJS("css",src,callNext)
+						}												
+					};
+					function callNext(){					
+						if(count<len-1){
+							count++;
+							_this.precent = Math.ceil((count/len)*100)+"%"; 
+							_this.LoadEndCall && _this.LoadEndCall.call(_this,_this.precent);
+						}else{
+							_this.precent = "100%";
+							_this.LoadEndCall && _this.LoadEndCall.call(_this,_this.precent);
+							_this.loadsuccess=true;
+							_this.LoadSuccessCall && _this.LoadSuccessCall.call(_this);
 						}
-
-						//单个资源加载成功后的回调函数
-						function callNext(){
-							i++;
-							if(i<len){
-								isLoad(i);
-							}else{
-								_this.loadsuccess=true;
-								_this.LoadSuccess();
-							}
-						}
-					})(i)
+					}
 				},
-
-				/*加载成功函数*/
+				LoadEnd:function(callback){
+					if(!callback)return;
+					this.LoadEndCall = callback;
+					return this;
+				},
 				LoadSuccess:function(callback){
-					callback && callback.call(this);
+					if(!callback)return;
+					this.LoadSuccessCall = callback;
+					return this;
 				}
-			}
-			window.LoadQueue=LoadQueue;
+			};
+
+			window.LoadList=LoadList;
 		})(window)
 
 		//使用方式
@@ -201,19 +200,23 @@
 			{src:'img/0.m4a',id:"sound"}
 		];
 
-		var loadqueue=new LoadQueue({
-			manifest:manifest,
-			version:"1.3.0"
+		var loadqueue=new LoadList({
+			manifest: manifest,
+			version: "1.3.0",
+			path: ""
 		});
-		loadqueue.done();
-		loadqueue.LoadSuccess=function(){
+		loadqueue.LoadEnd(function(precent){
+			document.querySelector(".progress").innerHTML = precent
+			console.log(precent)
+		}).LoadSuccess(function(){
 			alert("你大爷的另一个加载成功   "+$("#one").text());	
+			console.log(this)
 			var audio=loadqueue.getResult("sound");
 			audio.play();
 			audio.loop=true;
-			var img=loadqueue.getResult("big");
+			var img=loadqueue.getResult("twee");
 			console.log(img);
-		}
+		})
 	</script>
 </body>
 </html>
