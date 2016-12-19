@@ -78,6 +78,22 @@
             source.innerHTML = data;
             document.getElementsByTagName('head')[0].appendChild(source);
         },
+
+        writeLocalStorage: function (id, version, data) {
+            try {
+                window.localStorage.setItem(id, JSON.stringify({
+                    "version": version,
+                    "factory": data
+                }));
+            } catch (e) {
+                //监听localstorage内存满之后处理，pc端5M，移动端2.5M
+                if (e.name === 'QUOTA_EXCEEDED_ERR' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                    // todo
+                } else {
+                    // todo
+                }                                
+            }
+        }, 
  
         done: function () {
             if (!this.list.length) return false;
@@ -98,10 +114,7 @@
  
                     }, function () {
                         _this.loadCssJS(src, function (data) {
-                            window.localStorage.setItem(id, JSON.stringify({
-                                "version": version,
-                                "factory": data
-                            }));
+                            _this.writeLocalStorage(id, version, data);
                             _this.writeJS(data);
                             callNext();
                         })
@@ -115,10 +128,7 @@
  
                     }, function () {
                         _this.loadCssJS(src, function (data) {
-                            window.localStorage.setItem(id, JSON.stringify({
-                                "version": version,
-                                "factory": data
-                            }));
+                            _this.writeLocalStorage(id, version, data);
                             _this.writeCSS(data);
                             callNext();
                         })
